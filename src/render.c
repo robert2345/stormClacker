@@ -2,6 +2,7 @@
 #include <stdio.h>
 #include <stdbool.h>
 #include <stdlib.h>
+#include <render.h>
 
 // DEFINES
 #define WIN_WIDTH 640
@@ -83,11 +84,10 @@ static void createCloud();
 
 uint32_t updateBackground(uint32_t interval, void* parameters);
 
-int renderDestroy()
+void renderDestroy(void)
 {
   SDL_DestroyTexture(asciiTexture_p);
   SDL_DestroyTexture(leavesTexture_p);
-  return 0;
 }
 
 int renderInit(int gridSizeInput)
@@ -171,7 +171,7 @@ void render(char* input_p, int score)
   if (SDL_SetRenderDrawColor(myRenderer_p, 20, 20, 255, 255) != 0) printf("Color error\n");
   SDL_RenderClear(myRenderer_p);
 
-  //drawSky();
+  drawSky();
   drawGround();
   drawClouds();
   drawLeaves();
@@ -195,6 +195,15 @@ void render(char* input_p, int score)
     }
   } 
   drawScore(score);
+  SDL_RenderPresent(myRenderer_p);
+}
+
+void renderScoreBoard(scoreS* hiScoreList, int numberOfScores)
+{
+  if (SDL_SetRenderDrawColor(myRenderer_p, 0, 0, 0, 255) != 0) printf("Color error\n");
+ SDL_RenderClear(myRenderer_p);
+
+
   SDL_RenderPresent(myRenderer_p);
 }
 

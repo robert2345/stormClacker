@@ -2,6 +2,7 @@
 #include <stdio.h>
 #include <stdbool.h>
 #include <render.h>
+#include <score.h>
 
 #define VALUE_FOR_MISS -1;
 #define VALUE_FOR_HIT 2;
@@ -12,6 +13,8 @@
 #define INVALID_POS (-1)
 #define NUMBER_OF_CHARS (END_CHAR - START_CHAR)
 static int score = 0;
+static bool playerLost = false;
+static int charPlaceIntervalMs = 1000;
 SDL_mutex* myMutex_p;
 static int charPlacementTable[END_CHAR - START_CHAR][2];
 static char grid[GRID_SIZE][GRID_SIZE] = {0};
@@ -22,23 +25,12 @@ static Uint32 placeChar(Uint32 interval, void *param);
 
 static char applyShift(char input);
 static bool getEmptyPos(int* x_p, int* y_p, char inputChar);
+static void recordScoreAndReset(void);
+static void resetGame(void);
+static void setGameProgression(bool gameProgressing);
 
 int main(void)
 {
-  // Initialize the placement of the digits to invalid.
-  for (int i = 0; i < (END_CHAR - START_CHAR); i++) 
-  {
-    charPlacementTable[i][0] = INVALID_POS;
-    charPlacementTable[i][1] = INVALID_POS;
-  }
-
-  // Initialize the content of the grid  
-  for (int i = 0; i < (GRID_SIZE * GRID_SIZE); i++) 
-  {
-    grid[i / GRID_SIZE][i % GRID_SIZE] = INVALID_CHAR;
-  }
-
-  
   if (SDL_Init(SDL_INIT_EVERYTHING) != 0)
   {
     printf("Could not initialize SDL Video");
@@ -49,15 +41,14 @@ int main(void)
 
   renderInit(GRID_SIZE);
   bool escaped = false;
-  int intensity = 1;
-  int error = 0;
   myMutex_p = SDL_CreateMutex();
-  const int newTargetTimeoutMs = 1000;
-  SDL_TimerID my_timer_id = SDL_AddTimer(newTargetTimeoutMs, placeChar, 0);
+
+  resetGame();
+  setGameProgression(true);
+
   while (escaped != true)
   {
     SDL_Event event;
-    const int timeout = 1 / 60;
     // Check if we are going to abort.
     while (SDL_PollEvent(&event))
     {
@@ -72,6 +63,10 @@ int main(void)
     }
     // Render the view to update the playing field and score.
     render(&grid[0][0], score);
+    if (playerLost)
+    {
+      recordScoreAndReset();
+    }
   }
   printf("Seems like it's ok. Time to quit.\n");
 
@@ -203,6 +198,8 @@ uint32_t placeChar(uint32_t interval, void *param)
       }
       else // No place to place char. You have lost. not implemented yet though.
       {
+        printf("LOST!\n");
+        playerLost = true;
         break;
       } 
     }
@@ -247,3 +244,96 @@ static bool getEmptyPos(int* x_p, int* y_p, char inputChar)
   return false;
 }
 
+static void setGameProgression(bool gameProgressing)
+{
+  static SDL_TimerID my_timer_id = -1;
+  if (gameProgressing)
+  {
+    if (my_timer_id == -1)
+    {
+      my_timer_id = SDL_AddTimer(charPlaceIntervalMs, placeChar, 0);
+    }
+    else
+    {
+      printf("Error when starting timer. Already started.\n");
+    }
+  }
+  else
+  {
+    if (my_timer_id != -1)
+    {
+      SDL_RemoveTimer(my_timer_id);
+      my_timer_id = -1;
+    }
+    else
+    {
+      printf("Error when stopping timer. Already stopped.\n");
+    }
+  }
+}
+
+static void recordScoreAndReset(void)
+{
+#define MAX_NO_SCORES 10
+  setGameProgression(false);
+  scoreS hiScoreList[MAX_NO_SCORES];
+  int nbrOfScores = 0;
+  FILE* scoreFile = fopen("scoreboard.txt", "rw");
+
+  char name[255];
+  int score = 0;
+  while (0 < fscanf(scoreFile, "%s %d\n", name, &score))
+  {
+    snprintf(hiScoreList[nbrOfScores].name, MAX_NBR_NAME_CHARS + 1, "%s", name);
+    hiScoreList[nbrOfScores].score = score;
+    nbrOfScores++;
+  }
+
+  renderScoreBoard(hiScoreList, nbrOfScores);
+
+  // readKeyboard input
+
+  // while input != enter
+  bool nameComplete = false;
+  while (nameComplete != true)
+  {
+    SDL_Event event;
+    // Check if we are going to abort.
+    while (SDL_PollEvent(&event))
+    {
+      if (event.type == SDL_KEYDOWN)
+      {
+        if (event.key.keysym.sym == SDLK_KP_ENTER ||
+            event.key.keysym.sym == SDLK_RETURN ||
+            event.key.keysym.sym == SDLK_RETURN2) nameComplete = true;
+        else
+        {
+          //gameInputKey(&event.key);
+        }
+      }
+    }
+  }
+  //update score file.
+  resetGame();
+  setGameProgression(true);
+}
+
+static void resetGame()
+{
+
+  score = 0;
+  playerLost = false;
+  charPlaceIntervalMs = 350;
+  // Initialize the placement of the digits to invalid.
+  for (int i = 0; i < (END_CHAR - START_CHAR); i++) 
+  {
+    charPlacementTable[i][0] = INVALID_POS;
+    charPlacementTable[i][1] = INVALID_POS;
+  }
+
+  // Initialize the content of the grid  
+  for (int i = 0; i < (GRID_SIZE * GRID_SIZE); i++) 
+  {
+    grid[i / GRID_SIZE][i % GRID_SIZE] = INVALID_CHAR;
+  }
+}
