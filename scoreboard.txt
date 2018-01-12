@@ -1,0 +1,4 @@
+rob 10000
+vic 5000
+sunken 1
+
