@@ -81,6 +81,7 @@ static void drawSky();
 static void drawClouds();
 static void removeCloud();
 static void createCloud();
+static void drawText(char* string, int charSize, int x, int y);
 
 uint32_t updateBackground(uint32_t interval, void* parameters);
 
@@ -200,16 +201,28 @@ void render(char* input_p, int score)
 
 void renderScoreBoard(scoreS* hiScoreList, int numberOfScores)
 {
-  if (SDL_SetRenderDrawColor(myRenderer_p, 0, 0, 0, 255) != 0) printf("Color error\n");
+  if (SDL_SetRenderDrawColor(myRenderer_p, 255, 255, 255, 255) != 0) printf("Color error\n");
   SDL_RenderClear(myRenderer_p);
 
+  int startX = 40;
+  int startY = 40;
+  int charSize = (WIN_HEIGHT - 2 * startY) / 12; //TODO make this the same def or get real val from caller.
+  char scoreString[255];
+  int i;
+  sprintf(scoreString, "PLAYER - SCORE");
+  drawText(scoreString, charSize, startX, startY);
 
+  for (i = 0; i < numberOfScores; i++)
+  {
+    sprintf(scoreString, "%6s - %d", hiScoreList[i].name, hiScoreList[i].score);
+    drawText(scoreString, charSize, startX, startY + ((i+1) * charSize));
+  }
+
+  sprintf(scoreString, "ENTER CONFIRMS AND RESTARTS");
+  int infoCharSize = 20;
+  drawText(scoreString, infoCharSize, (WIN_WIDTH - strlen(scoreString) * infoCharSize) >> 2, startY + ((i+1) * charSize));
   SDL_RenderPresent(myRenderer_p);
 
-  for (int i = 0; i < numberOfScores; i++)
-  {
-    printf("%s %d\n", hiScoreList[i].name, hiScoreList[i].score);
-  }
 }
 
 static void drawSky()
@@ -319,6 +332,24 @@ static void drawScore(int score)
 
    if (SDL_RenderCopy(myRenderer_p, asciiTexture_p, &sourceRect, &destRect)) printf("Error when RenderCopy: %s\n", SDL_GetError());
   } 
+}
+
+static void drawText(char* string, int charSize, int x, int y)
+{
+  SDL_Rect destRect;
+   destRect.x = x;
+   destRect.y = y;
+   destRect.w = charSize;
+   destRect.h = charSize;
+  int numChars = strlen(string);
+  for (int i = 0; i < numChars; i++)
+  {
+   SDL_Rect sourceRect;
+   calcSourceRect(&sourceRect, string[i]);
+   destRect.x += charSize;   
+
+   if (SDL_RenderCopy(myRenderer_p, asciiTexture_p, &sourceRect, &destRect)) printf("Error when RenderCopy: %s\n", SDL_GetError());
+  }
 }
 
 static void calcSourceRect(SDL_Rect* rect, char inputChar)
