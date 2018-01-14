@@ -26,6 +26,7 @@ static Uint32 placeChar(Uint32 interval, void *param);
 static char applyShift(char input);
 static bool getEmptyPos(int* x_p, int* y_p, char inputChar);
 static void recordScoreAndReset(void);
+static scoreS* insertNewScore(int* nbrOfScores_p, scoreS hiScoreList[]);
 static void resetGame(void);
 static void setGameProgression(bool gameProgressing);
 
@@ -92,6 +93,30 @@ static void gameInputKey(SDL_KeyboardEvent* key_p)
   }
 }
 
+static void enterHighScore(scoreS* score_p, SDL_KeyboardEvent* key_p)
+{
+  int symbol = key_p->keysym.sym;
+  // check if this is a character and that it can be represented by ascii.
+  if ((symbol | 0x40000000) != 0 && symbol < 0x80)
+  {
+    // Check if shift is pressed. I so, modify entry.
+    if (key_p->keysym.mod & KMOD_SHIFT)
+    {
+      symbol = applyShift(symbol);
+    } 
+
+    // Check if correct symbol and modify score.
+    if (strlen(score_p->name) < MAX_NBR_NAME_CHARS)
+    {
+      sprintf(score_p->name, "%s%c", score_p->name, symbol);
+      //printf("adding some char to name. Now it is %s\n", score_p->name);
+    }
+  }
+  else
+  {
+// backspace
+  }
+}
 static char applyShift(char input)
 {
   switch(input)
@@ -278,7 +303,7 @@ static void recordScoreAndReset(void)
   setGameProgression(false);
   scoreS hiScoreList[MAX_NO_SCORES];
   int nbrOfScores = 0;
-  FILE* scoreFile = fopen("scoreboard.txt", "rw");
+  FILE* scoreFile = fopen("scoreboard.txt", "r");
 
   char name[255];
   int score = 0;
@@ -288,15 +313,21 @@ static void recordScoreAndReset(void)
     hiScoreList[nbrOfScores].score = score;
     nbrOfScores++;
   }
+  fclose(scoreFile);
 
-  renderScoreBoard(hiScoreList, nbrOfScores);
+  scoreS* newScore_p = insertNewScore(&nbrOfScores, hiScoreList);
+
 
   // readKeyboard input
 
   // while input != enter
-  bool nameComplete = false;
-  while (nameComplete != true)
+  bool nameComplete = (newScore_p == NULL); //If the newScore did not make the score board then no name should entered.
+  bool quitScoreView = false;
+  while (quitScoreView != true)
   {
+    // For each key press, show the board.
+    renderScoreBoard(hiScoreList, nbrOfScores);
+
     SDL_Event event;
     // Check if we are going to abort.
     while (SDL_PollEvent(&event))
@@ -305,15 +336,23 @@ static void recordScoreAndReset(void)
       {
         if (event.key.keysym.sym == SDLK_KP_ENTER ||
             event.key.keysym.sym == SDLK_RETURN ||
-            event.key.keysym.sym == SDLK_RETURN2) nameComplete = true;
-        else
+            event.key.keysym.sym == SDLK_RETURN2) quitScoreView = true;
+        else if(!nameComplete)
         {
-          //gameInputKey(&event.key);
+          enterHighScore(newScore_p, &event.key);
         }
       }
     }
   }
+  
+  
   //update score file.
+  scoreFile = fopen("scoreboard.txt", "w");
+  for (int scoreIndex = 0; scoreIndex < nbrOfScores; scoreIndex++)
+  {
+    fprintf(scoreFile, "%s %d\n", hiScoreList[scoreIndex].name, hiScoreList[scoreIndex].score);
+  }
+  fclose(scoreFile);
   resetGame();
   setGameProgression(true);
 }
@@ -336,4 +375,36 @@ static void resetGame()
   {
     grid[i / GRID_SIZE][i % GRID_SIZE] = INVALID_CHAR;
   }
+}
+
+static scoreS* insertNewScore(int* nbrOfScores_p, scoreS hiScoreList[])
+{
+  int i = 0;
+  scoreS* newScore_p = NULL;
+  while (hiScoreList[i].score > score)
+  {
+    i++;
+    if (i == *nbrOfScores_p) break;
+  }
+  //for (; i < MAX_NO_SCORES; i++)
+  //{
+  //  if (hiScoreList[i]
+  //}
+
+  //change this to start at the current number of entries.
+  for (int pushOutIndex = (MAX_NO_SCORES - 1); pushOutIndex > i ; pushOutIndex--)
+  {
+    memcpy(&hiScoreList[pushOutIndex], &hiScoreList[pushOutIndex-1], sizeof(scoreS)); 
+  }
+
+
+  if (i < MAX_NO_SCORES)
+  {
+    hiScoreList[i].name[0] = '\0';
+    hiScoreList[i].score = score;
+    newScore_p = &hiScoreList[i];
+    if (*nbrOfScores_p < MAX_NO_SCORES) *nbrOfScores_p += 1;
+  }
+
+  return newScore_p;
 }

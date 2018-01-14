@@ -201,10 +201,15 @@ void render(char* input_p, int score)
 void renderScoreBoard(scoreS* hiScoreList, int numberOfScores)
 {
   if (SDL_SetRenderDrawColor(myRenderer_p, 0, 0, 0, 255) != 0) printf("Color error\n");
- SDL_RenderClear(myRenderer_p);
+  SDL_RenderClear(myRenderer_p);
 
 
   SDL_RenderPresent(myRenderer_p);
+
+  for (int i = 0; i < numberOfScores; i++)
+  {
+    printf("%s %d\n", hiScoreList[i].name, hiScoreList[i].score);
+  }
 }
 
 static void drawSky()
