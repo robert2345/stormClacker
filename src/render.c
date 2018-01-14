@@ -1,4 +1,5 @@
 #include <SDL.h>
+#include <math.h>
 #include <stdio.h>
 #include <stdbool.h>
 #include <stdlib.h>
@@ -18,7 +19,7 @@
 #define CLOUD_MAX_SPEED 10
 #define MAX_NUM_CLOUDS 20
 #define NUM_LOOP_TYPES 3
-#define MAX_LOOP_LENGTH 16
+#define MAX_LOOP_LENGTH 17
 typedef struct leafS
 {
   int state;
@@ -82,6 +83,7 @@ static void drawClouds();
 static void removeCloud();
 static void createCloud();
 static void drawText(char* string, int charSize, int x, int y);
+static void initLoops();
 
 uint32_t updateBackground(uint32_t interval, void* parameters);
 
@@ -93,6 +95,7 @@ void renderDestroy(void)
 
 int renderInit(int gridSizeInput)
 {
+  initLoops();
   gridSize = gridSizeInput;
   myWindow_p = SDL_CreateWindow("Storm Clacker - typing in the wind.", 0, 0, WIN_WIDTH, WIN_HEIGHT, WIN_FLAGS);
   if (myWindow_p == NULL)
@@ -225,6 +228,23 @@ void renderScoreBoard(scoreS* hiScoreList, int numberOfScores)
 
 }
 
+/* LOCAL FUNCTIONS */
+
+static void initLoops(void)
+{
+  for (int loopType = 0; loopType < NUM_LOOP_TYPES; loopType++)
+  {
+    int numberOfLoops = 1 + maxLoopIndex[loopType];
+    for (int loopIndex = 0; loopIndex < numberOfLoops; loopIndex++)
+    {
+    loopS* loop_p = &loops[loopType][loopIndex];
+      loop_p->x = 3 * (loopType + 1) * (-sin(2*M_PI*loopIndex/numberOfLoops + (M_PI / numberOfLoops)));
+      loop_p->y = 3 * (loopType + 1) * (1-cos(2*M_PI*loopIndex/numberOfLoops + (M_PI / numberOfLoops)));
+      printf("Loop  %d, %d, %d, %d\n", loopType, loopIndex, loop_p->x,  loop_p->y); 
+    }
+  }
+}
+
 static void drawSky()
 {
   SDL_Rect sourceRect;
@@ -305,8 +325,8 @@ static void drawLeaves()
       int width = WIN_WIDTH / gridSize; 
       destRect.x = leaves[i].x;
       destRect.y = leaves[i].y; 
-      destRect.w = 2;
-      destRect.h = 2;
+      destRect.w = 3;
+      destRect.h = 3;
 
       if (SDL_RenderCopy(myRenderer_p, leavesTexture_p, &sourceRect, &destRect)) printf("Error when RenderCopy: %s\n", SDL_GetError());
     }
