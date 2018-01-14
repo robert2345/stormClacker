@@ -234,13 +234,18 @@ static void initLoops(void)
 {
   for (int loopType = 0; loopType < NUM_LOOP_TYPES; loopType++)
   {
+    loopS tmpLoops[MAX_LOOP_LENGTH + 1];
+    tmpLoops[0].x = 0;
+    tmpLoops[0].y = 0;
     int numberOfLoops = 1 + maxLoopIndex[loopType];
     for (int loopIndex = 0; loopIndex < numberOfLoops; loopIndex++)
     {
-    loopS* loop_p = &loops[loopType][loopIndex];
-      loop_p->x = 3 * (loopType + 1) * (-sin(2*M_PI*loopIndex/numberOfLoops + (M_PI / numberOfLoops)));
-      loop_p->y = 3 * (loopType + 1) * (1-cos(2*M_PI*loopIndex/numberOfLoops + (M_PI / numberOfLoops)));
-      printf("Loop  %d, %d, %d, %d\n", loopType, loopIndex, loop_p->x,  loop_p->y); 
+      loopS* loop_p = &loops[loopType][loopIndex];
+      tmpLoops[loopIndex + 1].x = 3 * (loopType + 1) * (-sin(2*M_PI*loopIndex/numberOfLoops + (M_PI / numberOfLoops)));
+      tmpLoops[loopIndex + 1].y = 3 * (loopType + 1) * (1-cos(2*M_PI*loopIndex/numberOfLoops + (M_PI / numberOfLoops)));
+      loop_p->x = tmpLoops[loopIndex + 1].x - tmpLoops[loopIndex].x;
+      loop_p->y = tmpLoops[loopIndex + 1].y - tmpLoops[loopIndex].y;
+      //printf("Loop  %d, %d, %d, %d\n", loopType, loopIndex, loop_p->x,  loop_p->y); 
     }
   }
 }
@@ -343,7 +348,7 @@ static void drawScore(int score, int intervalMs)
    destRect.y = 0;
    destRect.w = SCORE_CHAR_SIZE;
    destRect.h = SCORE_CHAR_SIZE;
-  int numChars = snprintf(scoreString, STRING_SIZE, "Score: %6d @ %3.2f chars per minute.", score, intervalMs/1000.0);
+  int numChars = snprintf(scoreString, STRING_SIZE, "Score: %6d @ %3.2f chars per minute.", score, 1000.0/intervalMs);
   for (int i = 0; i < numChars; i++)
   {
    SDL_Rect sourceRect;
@@ -412,13 +417,23 @@ uint32_t updateBackground(uint32_t interval, void* parameters)
     newLeaf_p->onGround = false;
     newLeaf_p->lifetime = 500;
   }
+  else if (newLeafRand%20 > 16 && numLeaves < MAX_NUM_LEAVES)
+  {
+    leafS* newLeaf_p = &leaves[numLeaves];
+    numLeaves++;
+    newLeaf_p->x = WIN_WIDTH + 20;
+    newLeaf_p->y = WIN_HEIGHT - GROUND_LEVEL - 10; 
+    newLeaf_p->state = newLeafRand % 3 + 1;
+    newLeaf_p->onGround = false;
+    newLeaf_p->lifetime = 500;
+  }
 
   for (int i = 0; i < MAX_NUM_LEAVES; i++)
   {
     leafS* leaf_p = &leaves[i];
     if (leaf_p->state != 0) // only active leaves
     {
-      if (windSpeed  == 8 && (rand()%15) == 0)
+      if (windSpeed  == ((MAX_SPEED-1) << 2) && (rand()%40) == 0)
       {
         leaf_p->loop = true;
         leaf_p->loopType = rand()%3;
@@ -432,14 +447,14 @@ uint32_t updateBackground(uint32_t interval, void* parameters)
          int loopType =  leaf_p->loopType;
          int loopIndex = leaf_p->loopIndex;
           leaf_p->x += loops[loopType][loopIndex].x - windSpeed;
-          leaf_p->y += loops[loopType][loopIndex].y;
+          leaf_p->y -= loops[loopType][loopIndex].y;
           leaf_p->loopIndex++;
           if (leaf_p->loopIndex == maxLoopIndex[loopType]) leaf_p->loop = false;
         }
         else
         {
           int thisSpeed = windSpeed + rand()%(MAX_SPEED + 4) - 4; 
-          int thisSpeedY = -5;
+          int thisSpeedY = -2;
           leaf_p->x -= thisSpeed;
           leaf_p->y -= thisSpeedY;
 
