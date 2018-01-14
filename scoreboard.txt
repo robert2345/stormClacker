@@ -1,9 +1,10 @@
+RC 306
+ROC 288
+ASS 121
+pun 28
+9d 26
 hej 25
 kRo 21
+90f 14
+APA 11
 Foi 6
-0 6
-gfd 0
- 0
-0 0
-fob 0
-vvv -15

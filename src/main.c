@@ -12,9 +12,12 @@
 #define INVALID_CHAR ' '
 #define INVALID_POS (-1)
 #define NUMBER_OF_CHARS (END_CHAR - START_CHAR)
+#define INTERVAL_COUNT_START 40
+#define INTERVAL_START_MS 1500
 static int score = 0;
 static bool playerLost = false;
-static int charPlaceIntervalMs = 1000;
+static int charPlaceIntervalMs = INTERVAL_START_MS;
+static int intervalCountDown = INTERVAL_COUNT_START;
 SDL_mutex* myMutex_p;
 static int charPlacementTable[END_CHAR - START_CHAR][2];
 static char grid[GRID_SIZE][GRID_SIZE] = {0};
@@ -63,7 +66,7 @@ int main(void)
       }
     }
     // Render the view to update the playing field and score.
-    render(&grid[0][0], score);
+    render(&grid[0][0], score, charPlaceIntervalMs);
     if (playerLost)
     {
       recordScoreAndReset();
@@ -97,7 +100,15 @@ static void enterHighScore(scoreS* score_p, SDL_KeyboardEvent* key_p)
 {
   int symbol = key_p->keysym.sym;
   // check if this is a character and that it can be represented by ascii.
-  if ((symbol | 0x40000000) != 0 && symbol < 0x80)
+  if(symbol == SDLK_BACKSPACE)
+  {
+    int length = strlen(score_p->name);
+    if (length > 0)
+    {
+      score_p->name[length - 1] = '\0';
+    }
+  }
+  else if ((symbol | 0x40000000) != 0 && symbol < 0x80)
   {
     // Check if shift is pressed. I so, modify entry.
     if (key_p->keysym.mod & KMOD_SHIFT)
@@ -111,10 +122,6 @@ static void enterHighScore(scoreS* score_p, SDL_KeyboardEvent* key_p)
       sprintf(score_p->name, "%s%c", score_p->name, symbol);
       //printf("adding some char to name. Now it is %s\n", score_p->name);
     }
-  }
-  else
-  {
-// backspace
   }
 }
 static char applyShift(char input)
@@ -223,12 +230,20 @@ uint32_t placeChar(uint32_t interval, void *param)
       }
       else // No place to place char. You have lost. not implemented yet though.
       {
-        printf("LOST!\n");
         playerLost = true;
         break;
       } 
     }
   }
+
+  // Make the interval smaller everytime a certain number of characters have been placed.
+  intervalCountDown--;
+  if (intervalCountDown == 0)
+  {
+    intervalCountDown = INTERVAL_COUNT_START;
+    charPlaceIntervalMs = charPlaceIntervalMs * 0.8;
+  }
+
   SDL_UnlockMutex(myMutex_p);
 
   SDL_Event event;
@@ -243,7 +258,7 @@ uint32_t placeChar(uint32_t interval, void *param)
   event.user = userevent;
 
   SDL_PushEvent(&event);
-  return(interval);
+  return(charPlaceIntervalMs);
 }
 
 /*
@@ -362,7 +377,7 @@ static void resetGame()
 
   score = 0;
   playerLost = false;
-  charPlaceIntervalMs = 350;
+  charPlaceIntervalMs = INTERVAL_START_MS;
   // Initialize the placement of the digits to invalid.
   for (int i = 0; i < (END_CHAR - START_CHAR); i++) 
   {

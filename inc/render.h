@@ -10,7 +10,7 @@ void renderDestroy(void);
 
 /* render() will draw all the objects onto the canvas and flip the screen.
  */
-void render(char* input, int score);
+void render(char* input, int score, int intervalMs);
 
 /* renderInit() will initialize the renderer.
  */

@@ -73,7 +73,7 @@ static int gridSize = 0;
 static int windSpeed = 0;
 
 static void calcSourceRect(SDL_Rect* rect, char inputChar);
-static void drawScore(int score);
+static void drawScore(int score, int intervalMs);
 static void drawLeaves();
 static void drawTree();
 static void drawGround();
@@ -94,7 +94,7 @@ void renderDestroy(void)
 int renderInit(int gridSizeInput)
 {
   gridSize = gridSizeInput;
-  myWindow_p = SDL_CreateWindow("myWindowTitle", 0, 0, WIN_WIDTH, WIN_HEIGHT, WIN_FLAGS);
+  myWindow_p = SDL_CreateWindow("Storm Clacker - typing in the wind.", 0, 0, WIN_WIDTH, WIN_HEIGHT, WIN_FLAGS);
   if (myWindow_p == NULL)
   {
     printf("Could not create window.\n");
@@ -167,7 +167,7 @@ int renderInit(int gridSizeInput)
   return 0;
 }
 
-void render(char* input_p, int score)
+void render(char* input_p, int score, int intervalMs)
 {
   if (SDL_SetRenderDrawColor(myRenderer_p, 20, 20, 255, 255) != 0) printf("Color error\n");
   SDL_RenderClear(myRenderer_p);
@@ -195,7 +195,7 @@ void render(char* input_p, int score)
       if (SDL_RenderCopy(myRenderer_p, asciiTexture_p, &sourceRect, &destRect)) printf("Error when RenderCopy: %s\n", SDL_GetError());
     }
   } 
-  drawScore(score);
+  drawScore(score, intervalMs);
   SDL_RenderPresent(myRenderer_p);
 }
 
@@ -313,7 +313,7 @@ static void drawLeaves()
   }
 }
 
-static void drawScore(int score)
+static void drawScore(int score, int intervalMs)
 {
 #define STRING_SIZE 100
 #define SCORE_CHAR_SIZE 16;
@@ -323,7 +323,7 @@ static void drawScore(int score)
    destRect.y = 0;
    destRect.w = SCORE_CHAR_SIZE;
    destRect.h = SCORE_CHAR_SIZE;
-  int numChars = snprintf(scoreString, STRING_SIZE, "%d", score);
+  int numChars = snprintf(scoreString, STRING_SIZE, "Score: %6d @ %3.2f chars per minute.", score, intervalMs/1000.0);
   for (int i = 0; i < numChars; i++)
   {
    SDL_Rect sourceRect;
