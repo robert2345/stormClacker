@@ -20,6 +20,10 @@
 #define MAX_NUM_CLOUDS 20
 #define NUM_LOOP_TYPES 3
 #define MAX_LOOP_LENGTH 17
+
+#define FONT_WIDTH 35
+#define FONT_HEIGHT 75
+#define FONT_SIZE_RATIO ((float)FONT_WIDTH / (float)FONT_HEIGHT)
 typedef struct leafS
 {
   int state;
@@ -149,11 +153,11 @@ int renderInit(int gridSizeInput)
   SDL_FreeSurface(surface);
   
   // Create the texture that will be used to print ASCII.
-  if (NULL == (surface = SDL_LoadBMP("./src/ascii.bmp"))) printf("Error when loading BMP: %s\n", SDL_GetError());
+  if (NULL == (surface = SDL_LoadBMP("./src/consolas.bmp"))) printf("Error when loading BMP: %s\n", SDL_GetError());
   // Set first pixel as the transparent color.
   if (SDL_SetColorKey(surface,
                       SDL_TRUE,
-                      *((uint32_t*)(surface->pixels))) != 0)
+                      *((uint32_t*)(surface->pixels)+100)) != 0)
   {
     printf("Error when changing color key: %s\n", SDL_GetError());
   }
@@ -190,8 +194,9 @@ void render(char* input_p, int score, int intervalMs)
       calcSourceRect(&sourceRect, inputChar);
       SDL_Rect destRect;
       int height = WIN_HEIGHT / gridSize; 
-      int width = WIN_WIDTH / gridSize; 
-      destRect.x = x * width;
+      int horizontalSpacing = WIN_WIDTH / gridSize;
+      int width = height * FONT_SIZE_RATIO; 
+      destRect.x = x * horizontalSpacing + (horizontalSpacing/2 - width);
       destRect.y = y * height;
       destRect.w = width;
       destRect.h = height;
@@ -207,12 +212,14 @@ void renderScoreBoard(scoreS* hiScoreList, int numberOfScores)
   if (SDL_SetRenderDrawColor(myRenderer_p, 255, 255, 255, 255) != 0) printf("Color error\n");
   SDL_RenderClear(myRenderer_p);
 
-  int startX = 40;
   int startY = 40;
   int charSize = (WIN_HEIGHT - 2 * startY) / 12; //TODO make this the same def or get real val from caller.
   char scoreString[255];
   int i;
   sprintf(scoreString, "PLAYER - SCORE");
+
+  int startX = (WIN_WIDTH - strlen(scoreString) * charSize * FONT_SIZE_RATIO) / 2;
+
   drawText(scoreString, charSize, startX, startY);
 
   for (i = 0; i < numberOfScores; i++)
@@ -223,7 +230,8 @@ void renderScoreBoard(scoreS* hiScoreList, int numberOfScores)
 
   sprintf(scoreString, "ENTER CONFIRMS AND RESTARTS");
   int infoCharSize = 20;
-  drawText(scoreString, infoCharSize, (WIN_WIDTH - strlen(scoreString) * infoCharSize) >> 2, startY + ((i+1) * charSize));
+  startX = (WIN_WIDTH - strlen(scoreString) * infoCharSize * FONT_SIZE_RATIO) / 2;
+  drawText(scoreString, infoCharSize, startX, startY + ((i+1) * charSize));
   SDL_RenderPresent(myRenderer_p);
 
 }
@@ -361,17 +369,18 @@ static void drawScore(int score, int intervalMs)
 
 static void drawText(char* string, int charSize, int x, int y)
 {
+  int charWidth = (int)(charSize * FONT_SIZE_RATIO);
   SDL_Rect destRect;
    destRect.x = x;
    destRect.y = y;
-   destRect.w = charSize;
    destRect.h = charSize;
+   destRect.w = charWidth;
   int numChars = strlen(string);
   for (int i = 0; i < numChars; i++)
   {
    SDL_Rect sourceRect;
    calcSourceRect(&sourceRect, string[i]);
-   destRect.x += charSize;   
+   destRect.x += charWidth;
 
    if (SDL_RenderCopy(myRenderer_p, asciiTexture_p, &sourceRect, &destRect)) printf("Error when RenderCopy: %s\n", SDL_GetError());
   }
@@ -379,12 +388,12 @@ static void drawText(char* string, int charSize, int x, int y)
 
 static void calcSourceRect(SDL_Rect* rect, char inputChar)
 {
-  int bitmapX = 16 * (inputChar % 16);
-  int bitmapY = 15 * (inputChar / 16);
+  rect->w = FONT_WIDTH;//35;
+  rect->h = FONT_HEIGHT; //75;
+  int bitmapX = rect->w * (inputChar % 16);
+  int bitmapY = rect->h * (inputChar / 16);
   rect->x = bitmapX;
   rect->y = bitmapY;
-  rect->w = 16;
-  rect->h = 15;
 }
 
 static void removeCloud(int i)
