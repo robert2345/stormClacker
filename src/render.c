@@ -14,8 +14,9 @@
 #define MAX_NUM_LEAVES 1000
 #define NUM_LEAF_STATES 4
 #define TREE_X (WIN_WIDTH - 200)
-#define TREE_Y (WIN_HEIGHT - 200)
-#define GROUND_LEVEL 70
+#define TREE_Y (WIN_HEIGHT - 175)
+#define GROUND_LEVEL 40
+#define MOUNTAIN_LEVEL 85
 #define CLOUD_MAX_SPEED 10
 #define MAX_NUM_CLOUDS 20
 #define NUM_LOOP_TYPES 3
@@ -278,32 +279,30 @@ static void drawSky()
 static void drawGround()
 {
   SDL_Rect sourceRect;
-  sourceRect.x = 94;
-  sourceRect.y = 40;
-  sourceRect.h = 9;
-  sourceRect.w = 80;
+  sourceRect.x = 62;
+  sourceRect.y = 17;
+  sourceRect.h = 64-17;
+  sourceRect.w = 318-62;
   SDL_Rect destRect;
   destRect.x = 0;
-  destRect.y = WIN_HEIGHT - GROUND_LEVEL;
+  destRect.y = WIN_HEIGHT - GROUND_LEVEL - MOUNTAIN_LEVEL;
   destRect.w = WIN_WIDTH;
-  destRect.h = GROUND_LEVEL;
+  destRect.h = GROUND_LEVEL + MOUNTAIN_LEVEL;
 
   if (SDL_RenderCopy(myRenderer_p, leavesTexture_p, &sourceRect, &destRect)) printf("Error when RenderCopy: %s\n", SDL_GetError());
 }
 
 static void drawTree()
 {
-  int spriteY = 3;
-  int spriteX = 6;
+  int spriteY = 1;
+  int spriteX = 1;
   if (windSpeed == 4)
   {
-    spriteY = 56;
-    spriteX = 7;
+    spriteY = 53;
   }
   else if (windSpeed == 8)
   {
-    spriteY = 108;
-    spriteX = 7;
+    spriteY = 105;
   }
 
   SDL_Rect sourceRect;
@@ -349,19 +348,19 @@ static void drawLeaves()
 static void drawScore(int score, int intervalMs)
 {
 #define STRING_SIZE 100
-#define SCORE_CHAR_SIZE 16;
+#define SCORE_CHAR_SIZE 25;
   char scoreString[STRING_SIZE];
   SDL_Rect destRect;
   destRect.x = 0;
   destRect.y = 0;
   destRect.h = SCORE_CHAR_SIZE;
-  destRect.w = destRect.w * FONT_SIZE_RATIO;
+  destRect.w = destRect.h * FONT_SIZE_RATIO;
   int numChars = snprintf(scoreString, STRING_SIZE, "Score: %6d @ %3.2f chars per minute.", score, 1000.0/intervalMs);
   for (int i = 0; i < numChars; i++)
   {
    SDL_Rect sourceRect;
    calcSourceRect(&sourceRect, scoreString[i]);
-   destRect.x += SCORE_CHAR_SIZE;   
+   destRect.x += destRect.w;   
 
    if (SDL_RenderCopy(myRenderer_p, asciiTexture_p, &sourceRect, &destRect)) printf("Error when RenderCopy: %s\n", SDL_GetError());
   } 
