@@ -352,10 +352,10 @@ static void drawScore(int score, int intervalMs)
 #define SCORE_CHAR_SIZE 16;
   char scoreString[STRING_SIZE];
   SDL_Rect destRect;
-   destRect.x = 0;
-   destRect.y = 0;
-   destRect.w = SCORE_CHAR_SIZE;
-   destRect.h = SCORE_CHAR_SIZE;
+  destRect.x = 0;
+  destRect.y = 0;
+  destRect.h = SCORE_CHAR_SIZE;
+  destRect.w = destRect.w * FONT_SIZE_RATIO;
   int numChars = snprintf(scoreString, STRING_SIZE, "Score: %6d @ %3.2f chars per minute.", score, 1000.0/intervalMs);
   for (int i = 0; i < numChars; i++)
   {
