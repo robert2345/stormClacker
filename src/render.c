@@ -25,7 +25,7 @@
 #define FONT_WIDTH 35
 #define FONT_HEIGHT 75
 #define FONT_SIZE_RATIO ((float)FONT_WIDTH / (float)FONT_HEIGHT)
-typedef struct leafS
+typedef struct leaf
 {
   int state;
   int x;
@@ -37,6 +37,16 @@ typedef struct leafS
   int loopType;
 } leafS;
 
+typedef struct string
+{
+  int state;
+  int x;
+  int y;
+  int force;
+  int acceleration;
+  int velocity;
+} stringS;
+
 typedef struct loopS
 {
   int x;
@@ -44,6 +54,7 @@ typedef struct loopS
 } loopS;
 
 leafS leaves[MAX_NUM_LEAVES];
+stringS strings[WIN_WIDTH];
 int numLeaves = 0;
 
 typedef struct cloudS
@@ -81,6 +92,7 @@ static int windSpeed = 0;
 static void calcSourceRect(SDL_Rect* rect, char inputChar);
 static void drawScore(int score, int intervalMs);
 static void drawLeaves();
+static void drawString();
 static void drawTree();
 static void drawGround();
 static void drawSky();
@@ -89,8 +101,10 @@ static void removeCloud();
 static void createCloud();
 static void drawText(char* string, int charSize, int x, int y);
 static void initLoops();
+static void initStrings();
 
 uint32_t updateBackground(uint32_t interval, void* parameters);
+static void updateString();
 
 void renderDestroy(void)
 {
@@ -101,6 +115,7 @@ void renderDestroy(void)
 int renderInit(int gridSizeInput)
 {
   initLoops();
+  initStrings();
   gridSize = gridSizeInput;
   myWindow_p = SDL_CreateWindow("Storm Clacker - typing in the wind.", 0, 0, WIN_WIDTH, WIN_HEIGHT, WIN_FLAGS);
   if (myWindow_p == NULL)
@@ -108,8 +123,7 @@ int renderInit(int gridSizeInput)
     printf("Could not create window.\n");
     return -1;
   }
-
-  myRenderer_p = SDL_CreateRenderer(
+myRenderer_p = SDL_CreateRenderer(
       myWindow_p,
       FIRST_AVAILABLE_RENDERER,
       RENDERER_FLAGS);
@@ -184,6 +198,8 @@ void render(char* input_p, int score, int intervalMs)
   drawGround();
   drawClouds();
   drawLeaves();
+  updateString();
+  drawString();
   drawTree();
   
   for (int x = 0; x < gridSize; x++)
@@ -238,7 +254,16 @@ void renderScoreBoard(scoreS* hiScoreList, int numberOfScores)
 }
 
 /* LOCAL FUNCTIONS */
+static void initStrings(void)
+{
 
+  for (int i = 0; i < WIN_WIDTH; i++)
+  {
+    strings[i].x = i;
+    strings[i].y = WIN_HEIGHT/2;
+  }
+
+}
 static void initLoops(void)
 {
   for (int loopType = 0; loopType < NUM_LOOP_TYPES; loopType++)
@@ -311,8 +336,6 @@ static void drawTree()
   sourceRect.h = 44;
   sourceRect.w = 44;
   SDL_Rect destRect;
-  int height = WIN_HEIGHT / gridSize; 
-  int width = WIN_WIDTH / gridSize; 
   destRect.x = TREE_X;
   destRect.y = TREE_Y;
   destRect.w = 150;
@@ -333,8 +356,6 @@ static void drawLeaves()
       sourceRect.h = 1;
       sourceRect.w = 1;
       SDL_Rect destRect;
-      int height = WIN_HEIGHT / gridSize; 
-      int width = WIN_WIDTH / gridSize; 
       destRect.x = leaves[i].x;
       destRect.y = leaves[i].y; 
       destRect.w = 3;
@@ -342,6 +363,25 @@ static void drawLeaves()
 
       if (SDL_RenderCopy(myRenderer_p, leavesTexture_p, &sourceRect, &destRect)) printf("Error when RenderCopy: %s\n", SDL_GetError());
     }
+  }
+}
+
+static void drawString()
+{
+  for (int i = 0; i < WIN_WIDTH; i++)
+  {
+      SDL_Rect sourceRect;
+      sourceRect.x = 57;
+      sourceRect.y = 4 + strings[i].state;
+      sourceRect.h = 1;
+      sourceRect.w = 1;
+      SDL_Rect destRect;
+      destRect.x = strings[i].x;
+      destRect.y = strings[i].y; 
+      destRect.w = 3;
+      destRect.h = 3;
+
+      if (SDL_RenderCopy(myRenderer_p, leavesTexture_p, &sourceRect, &destRect)) printf("Error when RenderCopy: %s\n", SDL_GetError());
   }
 }
 
@@ -409,6 +449,50 @@ static void removeLeaf(int i)
   numLeaves--;
 }
 
+static int sqr(int a)
+{
+    return a;
+}
+
+static void updateString()
+{
+    static int count=0;
+    static bool on =true;
+    count++;
+#define MAX_FORCE 15
+    int pixelshift = (int)(MAX_FORCE * sin(count/20.0) + MAX_FORCE * sin(2 + count/14.0));
+    static const int center_y = WIN_HEIGHT/2;
+    if (count % WIN_WIDTH == 0) on = !on;
+    if (!on) pixelshift = 0;
+        stringS *this = &strings[0];
+        this->y = center_y + pixelshift;
+        //printf("line %d f %d a %d v %d y %d\n", 0, this->force, this->acceleration, this->velocity, this->y);
+
+    for (int i =1; i < WIN_WIDTH-1; i++) {
+        stringS *prev = &strings[i - 1];
+        stringS *this = &strings[i];
+        stringS *next = &strings[i + 1];
+
+        // update forces
+        this->force = sqr(prev->y - this->y) + sqr(next->y - this->y);
+        //update accelerations
+        this->acceleration = this->force;
+        //update velocities
+        this->velocity += this->acceleration;
+    }
+    
+    for (int i =1; i < WIN_WIDTH-1; i++) {
+        stringS *prev = &strings[i - 1];
+        stringS *this = &strings[i];
+        stringS *next = &strings[i + 1];
+
+        //update positions
+        this->y += this->velocity;
+        if (i < 5) {
+            //printf("line %d f %d a %d v %d y %d\n", i, this->force, this->acceleration, this->velocity, this->y);
+        }
+    }
+}
 
 uint32_t updateBackground(uint32_t interval, void* parameters)
 {
@@ -498,6 +582,8 @@ uint32_t updateBackground(uint32_t interval, void* parameters)
         if ((clouds[i].x + clouds[i].width) < 0) removeCloud(i);
       }
   }
+
+
   SDL_Event event;
   SDL_UserEvent userevent;
 
