@@ -41,10 +41,8 @@ typedef struct string
 {
   int state;
   int x;
-  int y;
-  int force;
-  int acceleration;
-  int velocity;
+  float y;
+  float last_y;
 } stringS;
 
 typedef struct loopS
@@ -377,7 +375,7 @@ static void drawString()
       sourceRect.w = 1;
       SDL_Rect destRect;
       destRect.x = strings[i].x;
-      destRect.y = strings[i].y; 
+      destRect.y = round(strings[i].y); 
       destRect.w = 3;
       destRect.h = 3;
 
@@ -449,70 +447,48 @@ static void removeLeaf(int i)
   numLeaves--;
 }
 
-static int sqr(int a)
-{
-    return a;
-}
-
 static void updateString()
 {
+#define MAX_FORCE 75
     static int count=0;
     static bool on =true;
     count++;
-#define MAX_FORCE 15
-    int pixelshift = (int)(MAX_FORCE * sin(count/20.0) + MAX_FORCE * sin(2 + count/14.0));
+    int pixelshift;
+    pixelshift = (int)(MAX_FORCE * sin(count/40.0) + MAX_FORCE * sin(2 + count/28.0));
     static const int center_y = WIN_HEIGHT/2;
-    if (count % WIN_WIDTH == 0) on = !on;
-    if (!on) pixelshift = 0;
-        stringS *this = &strings[0];
-        this->y = center_y + pixelshift;
-        //printf("line %d f %d a %d v %d y %d\n", 0, this->force, this->acceleration, this->velocity, this->y);
+    stringS *this = &strings[0];
+    this->y = center_y + pixelshift;
 
     for (int i =1; i < WIN_WIDTH-1; i++) {
+        this = &strings[i];
         stringS *prev = &strings[i - 1];
-        stringS *this = &strings[i];
-        stringS *next = &strings[i + 1];
 
-        // update forces
-        this->force = sqr(prev->y - this->y) + sqr(next->y - this->y);
-        //update accelerations
-        this->acceleration = this->force;
-        //update velocities
-        this->velocity += this->acceleration;
+        this->last_y = center_y + (prev->y - center_y)*0.99;
+        prev->y = prev->last_y;
     }
-    
-    for (int i =1; i < WIN_WIDTH-1; i++) {
-        stringS *prev = &strings[i - 1];
-        stringS *this = &strings[i];
-        stringS *next = &strings[i + 1];
-
-        //update positions
-        this->y += this->velocity;
-        if (i < 5) {
-            //printf("line %d f %d a %d v %d y %d\n", i, this->force, this->acceleration, this->velocity, this->y);
-        }
-    }
+    this = &strings[WIN_WIDTH];
+    this->y = this->last_y;
 }
 
 uint32_t updateBackground(uint32_t interval, void* parameters)
 {
 #define MAX_SPEED 3
-  windSpeed = (rand() % MAX_SPEED << 2);
-  int newLeafRand = rand();
-  if ((newLeafRand % 20 + windSpeed) > 18 && numLeaves < MAX_NUM_LEAVES)
-  {
-    leafS* newLeaf_p = &leaves[numLeaves];
-    numLeaves++;
-    newLeaf_p->x = TREE_X + 20 + rand()%60;
-    newLeaf_p->y = TREE_Y + 20; 
-    newLeaf_p->state = newLeafRand % 3 + 1;
-    newLeaf_p->onGround = false;
-    newLeaf_p->lifetime = 500;
-  }
-  else if (newLeafRand%20 > 16 && numLeaves < MAX_NUM_LEAVES)
-  {
-    leafS* newLeaf_p = &leaves[numLeaves];
-    numLeaves++;
+    windSpeed = (rand() % MAX_SPEED << 2);
+    int newLeafRand = rand();
+    if ((newLeafRand % 20 + windSpeed) > 18 && numLeaves < MAX_NUM_LEAVES)
+    {
+        leafS* newLeaf_p = &leaves[numLeaves];
+        numLeaves++;
+        newLeaf_p->x = TREE_X + 20 + rand()%60;
+        newLeaf_p->y = TREE_Y + 20; 
+        newLeaf_p->state = newLeafRand % 3 + 1;
+        newLeaf_p->onGround = false;
+        newLeaf_p->lifetime = 500;
+    }
+    else if (newLeafRand%20 > 16 && numLeaves < MAX_NUM_LEAVES)
+    {
+        leafS* newLeaf_p = &leaves[numLeaves];
+        numLeaves++;
     newLeaf_p->x = WIN_WIDTH + 20;
     newLeaf_p->y = WIN_HEIGHT - GROUND_LEVEL - 10; 
     newLeaf_p->state = newLeafRand % 3 + 1;
