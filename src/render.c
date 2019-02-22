@@ -6,6 +6,8 @@
 #include <render.h>
 
 // DEFINES
+#define CYLINDER_HEIGHT 150
+#define CYLINDER_HEIGHT 150
 #define WIN_WIDTH 640
 #define WIN_HEIGHT 480
 #define WIN_FLAGS 0 //SDL_WINDOW_FULLSCREEN
@@ -21,6 +23,7 @@
 #define MAX_NUM_CLOUDS 20
 #define NUM_LOOP_TYPES 3
 #define MAX_LOOP_LENGTH 17
+#define MAX_PHI 2.5
 
 #define FONT_WIDTH 35
 #define FONT_HEIGHT 75
@@ -42,7 +45,8 @@ typedef struct string
   int state;
   int x;
   float y;
-  float last_y;
+  double phi;
+  double last_phi;
 } stringS;
 
 typedef struct loopS
@@ -69,6 +73,8 @@ typedef struct cloudS
 cloudS clouds[MAX_NUM_CLOUDS];
 int numClouds = 0;
 
+int cylinderTextureHeight;
+
 #define L_U 3 // the min unit of loop movement
 loopS loops[NUM_LOOP_TYPES][MAX_LOOP_LENGTH] =
 {
@@ -84,6 +90,7 @@ static SDL_Renderer* myRenderer_p;
 static SDL_Texture* asciiTexture_p;
 static SDL_Texture* cloudTexture_p;
 static SDL_Texture* leavesTexture_p;
+static SDL_Texture* cylinderTexture_p;
 static int gridSize = 0;
 static int windSpeed = 0;
 
@@ -99,6 +106,7 @@ static void removeCloud();
 static void createCloud();
 static void drawText(char* string, int charSize, int x, int y);
 static void initLoops();
+static void stringWarpInit();
 static void initStrings();
 
 uint32_t updateBackground(uint32_t interval, void* parameters);
@@ -108,12 +116,15 @@ void renderDestroy(void)
 {
   SDL_DestroyTexture(asciiTexture_p);
   SDL_DestroyTexture(leavesTexture_p);
+  SDL_DestroyTexture(cylinderTexture_p);
 }
 
 int renderInit(int gridSizeInput)
 {
   initLoops();
   initStrings();
+  stringWarpInit();
+
   gridSize = gridSizeInput;
   myWindow_p = SDL_CreateWindow("Storm Clacker - typing in the wind.", 0, 0, WIN_WIDTH, WIN_HEIGHT, WIN_FLAGS);
   if (myWindow_p == NULL)
@@ -162,6 +173,16 @@ myRenderer_p = SDL_CreateRenderer(
                                                               surface))){
     printf("Error when creating texture: %s\n", SDL_GetError());
   }
+
+  /* Create the cylinder texture! */
+  if (NULL == (surface = SDL_LoadBMP("./src/cylinder.bmp"))) printf("Error when loading BMP: %s\n", SDL_GetError());
+  
+  cylinderTextureHeight = surface->h;
+  if (NULL == (cylinderTexture_p = SDL_CreateTextureFromSurface(myRenderer_p,
+                                                              surface))){
+    printf("Error when creating texture: %s\n", SDL_GetError());
+  }
+
 
   SDL_FreeSurface(surface);
   
@@ -364,23 +385,60 @@ static void drawLeaves()
   }
 }
 
+static double phi_over_cylinder[CYLINDER_HEIGHT];
+static void stringWarpInit() 
+{
+            const double d_cylinderHeight = 1.0 * CYLINDER_HEIGHT;
+        for (int y = 0; y < CYLINDER_HEIGHT; y+=1) { 
+            phi_over_cylinder[y] = 2*3.14*asin((1.0*y-d_cylinderHeight/2.0)/d_cylinderHeight/2.0);
+            printf("phi %f, cos %f\n", phi_over_cylinder[y], cos(phi_over_cylinder[y]));
+        }
+
+}
+
 static void drawString()
 {
-  for (int i = 0; i < WIN_WIDTH; i++)
-  {
-      SDL_Rect sourceRect;
-      sourceRect.x = 57;
-      sourceRect.y = 4 + strings[i].state;
-      sourceRect.h = 1;
-      sourceRect.w = 1;
-      SDL_Rect destRect;
-      destRect.x = strings[i].x;
-      destRect.y = round(strings[i].y); 
-      destRect.w = 3;
-      destRect.h = 3;
-
-      if (SDL_RenderCopy(myRenderer_p, leavesTexture_p, &sourceRect, &destRect)) printf("Error when RenderCopy: %s\n", SDL_GetError());
-  }
+#define PIXEL_SIZE 2
+    for (int x = 0; x < WIN_WIDTH; x+=PIXEL_SIZE)
+    {
+        for (int y = 0; y < CYLINDER_HEIGHT; y+=PIXEL_SIZE)
+        {
+            const double d_cylinderHeight = 1.0 * CYLINDER_HEIGHT;
+            SDL_Rect sourceRect;
+            sourceRect.x = x*3;
+//printf("x offset from center %f\n", y-d_cylinderHeight/2.0);
+//printf("x rel offset from center %f\n", (y-d_cylinderHeight/2.0)/d_cylinderHeight/2);
+//printf("radians offset from center %f\n", asin((2.0 * y - d_cylinderHeight) / d_cylinderHeight));
+            //printf("y %f\n", asin((1.0*y-d_cylinderHeight/2)/d_cylinderHeight/2)/2/3.14 * d_cylinderHeight);
+            //double phi = strings[x].phi + asin((1.0*y-d_cylinderHeight/2)/d_cylinderHeight/2);
+            double phi = strings[x].phi + phi_over_cylinder[y];
+            sourceRect.y = (int)round(cylinderTextureHeight/2 + phi/2/3.14 * cylinderTextureHeight)%cylinderTextureHeight;
+            sourceRect.h = 1;
+            sourceRect.w = 1;
+            SDL_Rect destRect;
+            //destRect.x = strings[x].x;
+            destRect.x = x;
+            //destRect.y = round(strings[x].y); 
+            //double twistScaleFactor = 2.0 / (1.0 + sin(strings[x].phi));
+            double twistScaleFactor = fabs(1.0 - fabs(strings[x-1].phi - strings[x+1].phi)/2/3.14);//(cos(phi_over_cylinder[y]));
+            //printf("scale %f, rel y %d, scaled off %f\n", twistScaleFactor, y-CYLINDER_HEIGHT/2, (y - CYLINDER_HEIGHT/2)*twistScaleFactor);
+            destRect.y = round(WIN_HEIGHT/2 + ((y - CYLINDER_HEIGHT/2)*twistScaleFactor));
+            destRect.w = PIXEL_SIZE;
+            destRect.h = PIXEL_SIZE * twistScaleFactor *2;
+            //printf("dest %d %d\n", destRect.x, destRect.y);
+            //printf("srx %d %d\n", sourceRect.x, sourceRect.y);
+            //printf("phi %f\n", phi_over_cylinder[y]);
+            double color_scaling = (cos(phi_over_cylinder[y]));
+            //printf("color_sxalein 0x%f\n", color_scaling);
+            char color_mod= (char)round(0xFF*color_scaling);
+            //printf("color_mod 0x%hhx\n", color_mod);
+            SDL_SetTextureColorMod(cylinderTexture_p,
+                           color_mod,
+                           color_mod,
+                           color_mod);
+            if (SDL_RenderCopy(myRenderer_p, cylinderTexture_p, &sourceRect, &destRect)) printf("Error when RenderCopy: %s\n", SDL_GetError());
+        }
+    }
 }
 
 static void drawScore(int score, int intervalMs)
@@ -452,22 +510,28 @@ static void updateString()
 #define MAX_FORCE 75
     static int count=0;
     static bool on =true;
+    double phaseshift;
     count++;
-    int pixelshift;
-    pixelshift = (int)(MAX_FORCE * sin(count/40.0) + MAX_FORCE * sin(2 + count/28.0));
+    //int pixelshift;
+    //pixelshift = (int)(MAX_FORCE * sin(count/40.0) + MAX_FORCE * sin(2 + count/28.0));
+    phaseshift =(MAX_PHI * sin(count/40.0) + MAX_PHI * sin(2 + count/28.0));
     static const int center_y = WIN_HEIGHT/2;
     stringS *this = &strings[0];
-    this->y = center_y + pixelshift;
+    //this->y = center_y + pixelshift;
+    this->phi = phaseshift;
 
     for (int i =1; i < WIN_WIDTH-1; i++) {
         this = &strings[i];
         stringS *prev = &strings[i - 1];
 
-        this->last_y = center_y + (prev->y - center_y)*0.99;
-        prev->y = prev->last_y;
+        //this->last_y = center_y + (prev->y - center_y)*0.99;
+        this->last_phi = (prev->phi)*0.995;
+        //prev->y = prev->last_y;
+        prev->phi = prev->last_phi;
     }
     this = &strings[WIN_WIDTH];
-    this->y = this->last_y;
+    //this->y = this->last_y;
+    this->phi = this->last_phi;
 }
 
 uint32_t updateBackground(uint32_t interval, void* parameters)
