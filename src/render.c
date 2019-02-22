@@ -398,7 +398,7 @@ static void stringWarpInit()
 
 static void drawString()
 {
-#define PIXEL_SIZE 2
+#define PIXEL_SIZE 3
     for (int x = 0; x < WIN_WIDTH; x+=PIXEL_SIZE)
     {
         for (int y = 0; y < CYLINDER_HEIGHT; y+=PIXEL_SIZE)
@@ -406,32 +406,18 @@ static void drawString()
             const double d_cylinderHeight = 1.0 * CYLINDER_HEIGHT;
             SDL_Rect sourceRect;
             sourceRect.x = x*3;
-//printf("x offset from center %f\n", y-d_cylinderHeight/2.0);
-//printf("x rel offset from center %f\n", (y-d_cylinderHeight/2.0)/d_cylinderHeight/2);
-//printf("radians offset from center %f\n", asin((2.0 * y - d_cylinderHeight) / d_cylinderHeight));
-            //printf("y %f\n", asin((1.0*y-d_cylinderHeight/2)/d_cylinderHeight/2)/2/3.14 * d_cylinderHeight);
-            //double phi = strings[x].phi + asin((1.0*y-d_cylinderHeight/2)/d_cylinderHeight/2);
             double phi = strings[x].phi + phi_over_cylinder[y];
             sourceRect.y = (int)round(cylinderTextureHeight/2 + phi/2/3.14 * cylinderTextureHeight)%cylinderTextureHeight;
             sourceRect.h = 1;
             sourceRect.w = 1;
             SDL_Rect destRect;
-            //destRect.x = strings[x].x;
             destRect.x = x;
-            //destRect.y = round(strings[x].y); 
-            //double twistScaleFactor = 2.0 / (1.0 + sin(strings[x].phi));
-            double twistScaleFactor = fabs(1.0 - fabs(strings[x-1].phi - strings[x+1].phi)/2/3.14);//(cos(phi_over_cylinder[y]));
-            //printf("scale %f, rel y %d, scaled off %f\n", twistScaleFactor, y-CYLINDER_HEIGHT/2, (y - CYLINDER_HEIGHT/2)*twistScaleFactor);
+            double twistScaleFactor = fabs(1.0 - (fabs(strings[x-1].phi - strings[x+1].phi)));
             destRect.y = round(WIN_HEIGHT/2 + ((y - CYLINDER_HEIGHT/2)*twistScaleFactor));
             destRect.w = PIXEL_SIZE;
             destRect.h = PIXEL_SIZE * twistScaleFactor *2;
-            //printf("dest %d %d\n", destRect.x, destRect.y);
-            //printf("srx %d %d\n", sourceRect.x, sourceRect.y);
-            //printf("phi %f\n", phi_over_cylinder[y]);
             double color_scaling = (cos(phi_over_cylinder[y]));
-            //printf("color_sxalein 0x%f\n", color_scaling);
             char color_mod= (char)round(0xFF*color_scaling);
-            //printf("color_mod 0x%hhx\n", color_mod);
             SDL_SetTextureColorMod(cylinderTexture_p,
                            color_mod,
                            color_mod,
@@ -511,26 +497,19 @@ static void updateString()
     static int count=0;
     static bool on =true;
     double phaseshift;
-    count++;
-    //int pixelshift;
-    //pixelshift = (int)(MAX_FORCE * sin(count/40.0) + MAX_FORCE * sin(2 + count/28.0));
-    phaseshift =(MAX_PHI * sin(count/40.0) + MAX_PHI * sin(2 + count/28.0));
+    phaseshift =(MAX_PHI * sin(count/40.0) + MAX_PHI * sin(count/28.0));
     static const int center_y = WIN_HEIGHT/2;
     stringS *this = &strings[0];
-    //this->y = center_y + pixelshift;
     this->phi = phaseshift;
 
     for (int i =1; i < WIN_WIDTH-1; i++) {
         this = &strings[i];
         stringS *prev = &strings[i - 1];
 
-        //this->last_y = center_y + (prev->y - center_y)*0.99;
         this->last_phi = (prev->phi)*0.995;
-        //prev->y = prev->last_y;
         prev->phi = prev->last_phi;
     }
     this = &strings[WIN_WIDTH];
-    //this->y = this->last_y;
     this->phi = this->last_phi;
 }
 
@@ -612,7 +591,6 @@ uint32_t updateBackground(uint32_t interval, void* parameters)
     createCloud();
   }
 
-  //printf("Moving clouds %d\n", numClouds);
   for (int i = 0; i < MAX_NUM_CLOUDS; i++)
   {
     if (clouds[i].state != 0) // only active clouds
