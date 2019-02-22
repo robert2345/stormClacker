@@ -388,12 +388,11 @@ static void drawLeaves()
 static double phi_over_cylinder[CYLINDER_HEIGHT];
 static void stringWarpInit() 
 {
-            const double d_cylinderHeight = 1.0 * CYLINDER_HEIGHT;
-        for (int y = 0; y < CYLINDER_HEIGHT; y+=1) { 
+    const double d_cylinderHeight = 1.0 * CYLINDER_HEIGHT;
+    for (int y = 0; y < CYLINDER_HEIGHT; y+=1) { 
             phi_over_cylinder[y] = 2*3.14*asin((1.0*y-d_cylinderHeight/2.0)/d_cylinderHeight/2.0);
             printf("phi %f, cos %f\n", phi_over_cylinder[y], cos(phi_over_cylinder[y]));
         }
-
 }
 
 static void drawString()
