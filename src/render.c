@@ -6,6 +6,7 @@
 #include <render.h>
 
 // DEFINES
+#define PIXEL_SIZE 4
 #define CYLINDER_HEIGHT 150
 #define CYLINDER_HEIGHT 150
 #define WIN_WIDTH 640
@@ -70,10 +71,13 @@ typedef struct cloudS
   int speed;
 } cloudS;
 
+int bumpMap[WIN_WIDTH][WIN_HEIGHT];
+
 cloudS clouds[MAX_NUM_CLOUDS];
 int numClouds = 0;
 
 int cylinderTextureHeight;
+int cylinderTextureWidth;
 
 #define L_U 3 // the min unit of loop movement
 loopS loops[NUM_LOOP_TYPES][MAX_LOOP_LENGTH] =
@@ -94,6 +98,9 @@ static SDL_Texture* cylinderTexture_p;
 static int gridSize = 0;
 static int windSpeed = 0;
 
+static void initLens(void);
+static void updateLens(void);
+static void drawLens(void);
 static void calcSourceRect(SDL_Rect* rect, char inputChar);
 static void drawScore(int score, int intervalMs);
 static void drawLeaves();
@@ -124,6 +131,7 @@ int renderInit(int gridSizeInput)
   initLoops();
   initStrings();
   stringWarpInit();
+  initLens();
 
   gridSize = gridSizeInput;
   myWindow_p = SDL_CreateWindow("Storm Clacker - typing in the wind.", 0, 0, WIN_WIDTH, WIN_HEIGHT, WIN_FLAGS);
@@ -178,6 +186,7 @@ myRenderer_p = SDL_CreateRenderer(
   if (NULL == (surface = SDL_LoadBMP("./src/cylinder.bmp"))) printf("Error when loading BMP: %s\n", SDL_GetError());
   
   cylinderTextureHeight = surface->h;
+  cylinderTextureWidth = surface->h;
   if (NULL == (cylinderTexture_p = SDL_CreateTextureFromSurface(myRenderer_p,
                                                               surface))){
     printf("Error when creating texture: %s\n", SDL_GetError());
@@ -220,6 +229,8 @@ void render(char* input_p, int score, int intervalMs)
   updateString();
   drawString();
   drawTree();
+  //updateLens();
+  //drawLens();
   
   for (int x = 0; x < gridSize; x++)
   {
@@ -273,13 +284,16 @@ void renderScoreBoard(scoreS* hiScoreList, int numberOfScores)
 }
 
 /* LOCAL FUNCTIONS */
+static void initLens(void)
+{
+    memset(&bumpMap[0][0], 128, WIN_WIDTH*WIN_HEIGHT*sizeof(int));
+}
+
 static void initStrings(void)
 {
 
   for (int i = 0; i < WIN_WIDTH; i++)
   {
-    strings[i].x = i;
-    strings[i].y = WIN_HEIGHT/2;
   }
 
 }
@@ -389,29 +403,32 @@ static double phi_over_cylinder[CYLINDER_HEIGHT];
 static void stringWarpInit() 
 {
     const double d_cylinderHeight = 1.0 * CYLINDER_HEIGHT;
-    for (int y = 0; y < CYLINDER_HEIGHT; y+=1) { 
-            phi_over_cylinder[y] = 2*3.14*asin((1.0*y-d_cylinderHeight/2.0)/d_cylinderHeight/2.0);
+    phi_over_cylinder[0] = -1.57079633;
+            printf("phi %f, cos %f\n", phi_over_cylinder[0], cos(phi_over_cylinder[0]));
+    for (int y = 1; y < CYLINDER_HEIGHT; y+=1) { 
+            phi_over_cylinder[y] = 2*M_PI*asin(y/(2.0*d_cylinderHeight) - 0.25);
             printf("phi %f, cos %f\n", phi_over_cylinder[y], cos(phi_over_cylinder[y]));
         }
 }
 
 static void drawString()
 {
-#define PIXEL_SIZE 3
+    const double src_x_step = cylinderTextureWidth/WIN_WIDTH;
+    double twistScaleFactor = fabs(1.0 - (fabs(strings[0].phi - strings[PIXEL_SIZE*2].phi)));
     for (int x = 0; x < WIN_WIDTH; x+=PIXEL_SIZE)
     {
         for (int y = 0; y < CYLINDER_HEIGHT; y+=PIXEL_SIZE)
         {
             const double d_cylinderHeight = 1.0 * CYLINDER_HEIGHT;
             SDL_Rect sourceRect;
-            sourceRect.x = x*3;
+            sourceRect.x = x * src_x_step;
             double phi = strings[x].phi + phi_over_cylinder[y];
-            sourceRect.y = (int)round(cylinderTextureHeight/2 + phi/2/3.14 * cylinderTextureHeight)%cylinderTextureHeight;
+            sourceRect.y = ((int)round((cylinderTextureHeight/2 + phi/2/3.14 * cylinderTextureHeight)/PIXEL_SIZE))%cylinderTextureHeight;
+            if (sourceRect.y < 0) sourceRect.y += cylinderTextureHeight;
             sourceRect.h = 1;
             sourceRect.w = 1;
             SDL_Rect destRect;
             destRect.x = x;
-            double twistScaleFactor = fabs(1.0 - (fabs(strings[x-1].phi - strings[x+1].phi)));
             destRect.y = round(WIN_HEIGHT/2 + ((y - CYLINDER_HEIGHT/2)*twistScaleFactor));
             destRect.w = PIXEL_SIZE;
             destRect.h = PIXEL_SIZE * twistScaleFactor *2;
@@ -423,6 +440,7 @@ static void drawString()
                            color_mod);
             if (SDL_RenderCopy(myRenderer_p, cylinderTexture_p, &sourceRect, &destRect)) printf("Error when RenderCopy: %s\n", SDL_GetError());
         }
+        twistScaleFactor = fabs(1.0 - (fabs(strings[x].phi - strings[x+2*PIXEL_SIZE].phi)));
     }
 }
 
@@ -466,6 +484,21 @@ static void drawText(char* string, int charSize, int x, int y)
   }
 }
 
+static void drawLens()
+{
+    for (int x = 0; x < WIN_WIDTH; x++) {
+        for (int y = 0; y < WIN_HEIGHT; y++) {
+            char red = bumpMap[x][y] & 0xFF;
+            char green = ( bumpMap[x][y]>>8) & 0xFF;
+            char blue = (bumpMap[x][y]>>16) & 0xFF;
+            SDL_SetRenderDrawColor(myRenderer_p, red, green, blue, SDL_ALPHA_OPAQUE);
+            if (SDL_RenderDrawPoint(myRenderer_p, x, y) ) printf("Failed to draw point\n");
+
+        }
+    }
+
+}
+
 static void calcSourceRect(SDL_Rect* rect, char inputChar)
 {
   rect->w = FONT_WIDTH;//35;
@@ -494,22 +527,37 @@ static void updateString()
 {
 #define MAX_FORCE 75
     static int count=0;
-    static bool on =true;
     double phaseshift;
     phaseshift =(MAX_PHI * sin(count/40.0) + MAX_PHI * sin(count/28.0));
-    static const int center_y = WIN_HEIGHT/2;
+    count++;
     stringS *this = &strings[0];
-    this->phi = phaseshift;
+    this->last_phi = phaseshift;
 
-    for (int i =1; i < WIN_WIDTH-1; i++) {
+    for (int i = PIXEL_SIZE; i < WIN_WIDTH-1; i+=PIXEL_SIZE) {
         this = &strings[i];
-        stringS *prev = &strings[i - 1];
-
+        stringS *prev = &strings[i - PIXEL_SIZE];
         this->last_phi = (prev->phi)*0.995;
         prev->phi = prev->last_phi;
     }
     this = &strings[WIN_WIDTH];
+    stringS *prev = &strings[WIN_WIDTH - PIXEL_SIZE];
     this->phi = this->last_phi;
+    this->last_phi = (prev->phi)*0.995;
+    prev->phi = prev->last_phi;
+}
+
+static void updateLens(void)
+{
+    int bumpRadius = 10;
+    int start_x = rand()%(WIN_WIDTH - bumpRadius * 2);
+    int start_y = rand()%(WIN_HEIGHT - bumpRadius * 2);
+
+    for (int x = 0; x < 2*bumpRadius; x++) {
+        for (int y = 0; y < 2*bumpRadius; y++) {
+            bumpMap[x+start_x][y+start_y]+=10;
+        }
+    }
+
 }
 
 uint32_t updateBackground(uint32_t interval, void* parameters)
@@ -583,6 +631,7 @@ uint32_t updateBackground(uint32_t interval, void* parameters)
       }
     }
   }
+
 
 
   if (rand()%(WIN_WIDTH>>4) == 0)
