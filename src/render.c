@@ -6,7 +6,7 @@
 #include <render.h>
 
 // DEFINES
-#define PIXEL_SIZE 4
+#define PIXEL_SIZE 3
 #define CYLINDER_HEIGHT 150
 #define CYLINDER_HEIGHT 150
 #define WIN_WIDTH 640
@@ -45,7 +45,8 @@ typedef struct string
 {
   int state;
   int x;
-  float y;
+  double y;
+  double last_y;
   double phi;
   double last_phi;
 } stringS;
@@ -186,7 +187,7 @@ myRenderer_p = SDL_CreateRenderer(
   if (NULL == (surface = SDL_LoadBMP("./src/cylinder.bmp"))) printf("Error when loading BMP: %s\n", SDL_GetError());
   
   cylinderTextureHeight = surface->h;
-  cylinderTextureWidth = surface->h;
+  cylinderTextureWidth = surface->w;
   if (NULL == (cylinderTexture_p = SDL_CreateTextureFromSurface(myRenderer_p,
                                                               surface))){
     printf("Error when creating texture: %s\n", SDL_GetError());
@@ -297,6 +298,7 @@ static void initStrings(void)
   }
 
 }
+
 static void initLoops(void)
 {
   for (int loopType = 0; loopType < NUM_LOOP_TYPES; loopType++)
@@ -399,16 +401,25 @@ static void drawLeaves()
   }
 }
 
+double y_over_cylinder[CYLINDER_HEIGHT];
 static double phi_over_cylinder[CYLINDER_HEIGHT];
+char color_over_cylinder[CYLINDER_HEIGHT];
 static void stringWarpInit() 
 {
     const double d_cylinderHeight = 1.0 * CYLINDER_HEIGHT;
     phi_over_cylinder[0] = -1.57079633;
-            printf("phi %f, cos %f\n", phi_over_cylinder[0], cos(phi_over_cylinder[0]));
     for (int y = 1; y < CYLINDER_HEIGHT; y+=1) { 
             phi_over_cylinder[y] = 2*M_PI*asin(y/(2.0*d_cylinderHeight) - 0.25);
-            printf("phi %f, cos %f\n", phi_over_cylinder[y], cos(phi_over_cylinder[y]));
-        }
+    }
+
+    for (int y = 0; y < CYLINDER_HEIGHT; y+=1) { 
+            y_over_cylinder[y] = ((d_cylinderHeight/2.0 + phi_over_cylinder[y]/2.0/3.14 * d_cylinderHeight));
+            //printf("phi %f, cos %f, y %f\n", phi_over_cylinder[y], cos(phi_over_cylinder[y]), y_over_cylinder[y]);
+    }
+
+    for (int y = 0; y < CYLINDER_HEIGHT; y+=1) { 
+            color_over_cylinder[y] = (char)round(0xFF * cos(phi_over_cylinder[y]));
+    }
 }
 
 static void drawString()
@@ -422,9 +433,9 @@ static void drawString()
             const double d_cylinderHeight = 1.0 * CYLINDER_HEIGHT;
             SDL_Rect sourceRect;
             sourceRect.x = x * src_x_step;
-            double phi = strings[x].phi + phi_over_cylinder[y];
-            sourceRect.y = ((int)round((cylinderTextureHeight/2 + phi/2/3.14 * cylinderTextureHeight)/PIXEL_SIZE))%cylinderTextureHeight;
+            sourceRect.y = (strings[x].y + y_over_cylinder[y]);
             if (sourceRect.y < 0) sourceRect.y += cylinderTextureHeight;
+            sourceRect.y %= cylinderTextureHeight;
             sourceRect.h = 1;
             sourceRect.w = 1;
             SDL_Rect destRect;
@@ -432,8 +443,7 @@ static void drawString()
             destRect.y = round(WIN_HEIGHT/2 + ((y - CYLINDER_HEIGHT/2)*twistScaleFactor));
             destRect.w = PIXEL_SIZE;
             destRect.h = PIXEL_SIZE * twistScaleFactor *2;
-            double color_scaling = (cos(phi_over_cylinder[y]));
-            char color_mod= (char)round(0xFF*color_scaling);
+            char color_mod = color_over_cylinder[y];
             SDL_SetTextureColorMod(cylinderTexture_p,
                            color_mod,
                            color_mod,
@@ -532,18 +542,24 @@ static void updateString()
     count++;
     stringS *this = &strings[0];
     this->last_phi = phaseshift;
+    this->last_y = (phaseshift/2/3.14 * cylinderTextureHeight);
 
-    for (int i = PIXEL_SIZE; i < WIN_WIDTH-1; i+=PIXEL_SIZE) {
+    for (int i = PIXEL_SIZE; i < WIN_WIDTH-PIXEL_SIZE; i+=PIXEL_SIZE) {
         this = &strings[i];
         stringS *prev = &strings[i - PIXEL_SIZE];
         this->last_phi = (prev->phi)*0.995;
+        this->last_y = (prev->y)*0.995;
         prev->phi = prev->last_phi;
+        prev->y = prev->last_y;
     }
     this = &strings[WIN_WIDTH];
     stringS *prev = &strings[WIN_WIDTH - PIXEL_SIZE];
     this->phi = this->last_phi;
+    this->y = this->last_y;
     this->last_phi = (prev->phi)*0.995;
+    this->last_y = (prev->y)*0.995;
     prev->phi = prev->last_phi;
+    prev->y = prev->last_y;
 }
 
 static void updateLens(void)
