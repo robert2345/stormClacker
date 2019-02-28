@@ -7,6 +7,8 @@
 
 // DEFINES
 #define PIXEL_SIZE 3
+#define SHINE 0xA0
+#define SHADE 0xA0
 #define CYLINDER_HEIGHT 150
 #define CYLINDER_HEIGHT 150
 #define WIN_WIDTH 640
@@ -98,6 +100,7 @@ static SDL_Texture* leavesTexture_p;
 static SDL_Texture* cylinderTexture_p;
 static int gridSize = 0;
 static int windSpeed = 0;
+static double lightAngle = 0;
 
 static void initLens(void);
 static void updateLens(void);
@@ -404,6 +407,12 @@ static void drawLeaves()
 double y_over_cylinder[CYLINDER_HEIGHT];
 static double phi_over_cylinder[CYLINDER_HEIGHT];
 char color_over_cylinder[CYLINDER_HEIGHT];
+char highlight_over_cylinder[CYLINDER_HEIGHT];
+static double power(double in)
+{
+    return in*in*in*in*in*in*in*in;
+}
+
 static void stringWarpInit() 
 {
     const double d_cylinderHeight = 1.0 * CYLINDER_HEIGHT;
@@ -418,7 +427,9 @@ static void stringWarpInit()
     }
 
     for (int y = 0; y < CYLINDER_HEIGHT; y+=1) { 
-            color_over_cylinder[y] = (char)round(0xFF * cos(phi_over_cylinder[y]));
+            color_over_cylinder[y] = (char)round(SHADE * cos(phi_over_cylinder[y]));
+            highlight_over_cylinder[y] = (char)round(SHINE * power(cos(phi_over_cylinder[y])));
+            printf("highlight %hhu\n", highlight_over_cylinder[y]);
     }
 }
 
@@ -426,6 +437,7 @@ static void drawString()
 {
     const double src_x_step = cylinderTextureWidth/WIN_WIDTH;
     double twistScaleFactor = fabs(1.0 - (fabs(strings[0].phi - strings[PIXEL_SIZE*2].phi)));
+    const double dstPixelsPerRad = CYLINDER_HEIGHT/M_PI;
     for (int x = 0; x < WIN_WIDTH; x+=PIXEL_SIZE)
     {
         for (int y = 0; y < CYLINDER_HEIGHT; y+=PIXEL_SIZE)
@@ -443,12 +455,31 @@ static void drawString()
             destRect.y = round(WIN_HEIGHT/2 + ((y - CYLINDER_HEIGHT/2)*twistScaleFactor));
             destRect.w = PIXEL_SIZE;
             destRect.h = PIXEL_SIZE * twistScaleFactor *2;
-            char color_mod = color_over_cylinder[y];
+            unsigned int current_color_y = y - round(dstPixelsPerRad * lightAngle);
+            if (current_color_y > CYLINDER_HEIGHT) current_color_y = CYLINDER_HEIGHT-1;
+            unsigned char color_mod = color_over_cylinder[current_color_y];
             SDL_SetTextureColorMod(cylinderTexture_p,
                            color_mod,
                            color_mod,
                            color_mod);
             if (SDL_RenderCopy(myRenderer_p, cylinderTexture_p, &sourceRect, &destRect)) printf("Error when RenderCopy: %s\n", SDL_GetError());
+
+            /* Highlights */
+
+            color_mod = highlight_over_cylinder[current_color_y];
+            //printf("lightmod %hhu\n", color_mod);
+            if (color_mod > 1 ) {
+                sourceRect.x = 100;
+                sourceRect.y = 87;
+                SDL_SetTextureBlendMode(cloudTexture_p, SDL_BLENDMODE_ADD);
+                SDL_SetTextureColorMod(cloudTexture_p,
+                        color_mod,
+                        color_mod,
+                        color_mod);
+                if (SDL_RenderCopy(myRenderer_p, cloudTexture_p, &sourceRect, &destRect)) printf("Error when RenderCopy: %s\n", SDL_GetError());
+                SDL_SetTextureBlendMode(cloudTexture_p, SDL_BLENDMODE_NONE);
+            }
+
         }
         twistScaleFactor = fabs(1.0 - (fabs(strings[x].phi - strings[x+2*PIXEL_SIZE].phi)));
     }
@@ -538,6 +569,7 @@ static void updateString()
 #define MAX_FORCE 75
     static int count=0;
     double phaseshift;
+    lightAngle = sin(count/50.0);
     phaseshift =(MAX_PHI * sin(count/40.0) + MAX_PHI * sin(count/28.0));
     count++;
     stringS *this = &strings[0];
