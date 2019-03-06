@@ -6,9 +6,10 @@
 #include <render.h>
 
 // DEFINES
-#define PIXEL_SIZE 3
+#define PIXEL_SIZE 5
 #define SHINE 0xA0
 #define SHADE 0xA0
+#define STRING_LENGTH (WIN_WIDTH + 2 * PIXEL_SIZE) // One datapoint before visible and one after
 #define CYLINDER_HEIGHT 150
 #define CYLINDER_HEIGHT 150
 #define WIN_WIDTH 640
@@ -43,6 +44,20 @@ typedef struct leaf
   int loopType;
 } leafS;
 
+struct coord {
+    double x;
+    double y;
+    double z;
+};
+struct face {
+    struct coord *coords[4];
+};
+
+struct cube {
+    struct face faces[6];
+    struct face *sortedFaces[6];
+};
+
 typedef struct string
 {
   int state;
@@ -60,7 +75,7 @@ typedef struct loopS
 } loopS;
 
 leafS leaves[MAX_NUM_LEAVES];
-stringS strings[WIN_WIDTH];
+stringS strings[STRING_LENGTH];
 int numLeaves = 0;
 
 typedef struct cloudS
@@ -101,6 +116,7 @@ static SDL_Texture* cylinderTexture_p;
 static int gridSize = 0;
 static int windSpeed = 0;
 static double lightAngle = 0;
+static struct cube cube;
 
 static void initLens(void);
 static void updateLens(void);
@@ -119,6 +135,10 @@ static void drawText(char* string, int charSize, int x, int y);
 static void initLoops();
 static void stringWarpInit();
 static void initStrings();
+static void initCube();
+static void updateCube();
+static void drawCube();
+static void faceSortInsert(struct face *thisFace, struct face **sortedFaces);
 
 uint32_t updateBackground(uint32_t interval, void* parameters);
 static void updateString();
@@ -136,6 +156,7 @@ int renderInit(int gridSizeInput)
   initStrings();
   stringWarpInit();
   initLens();
+  initCube();
 
   gridSize = gridSizeInput;
   myWindow_p = SDL_CreateWindow("Storm Clacker - typing in the wind.", 0, 0, WIN_WIDTH, WIN_HEIGHT, WIN_FLAGS);
@@ -433,25 +454,45 @@ static void stringWarpInit()
     }
 }
 
+static double fsqr(double in) 
+{
+    return in*in*in;
+}
+
+static double calcTwistFactor(double phiDiff)
+{
+    if (phiDiff > 6.28 || phiDiff < -6.28) printf("phiDiff= %f\n", phiDiff);
+
+    double out = 0.5*(1 + cos(7*fabs(phiDiff)));
+
+    if (out < 0.1) printf("twist = %f\n", out);
+
+    return out;
+}
+
 static void drawString()
 {
     const double src_x_step = cylinderTextureWidth/WIN_WIDTH;
-    double twistScaleFactor = fabs(1.0 - (fabs(strings[0].phi - strings[PIXEL_SIZE*2].phi)));
+    const double src_y_step = cylinderTextureHeight/2/CYLINDER_HEIGHT;
+    double twistScaleFactor;
     const double dstPixelsPerRad = CYLINDER_HEIGHT/M_PI;
-    for (int x = 0; x < WIN_WIDTH; x+=PIXEL_SIZE)
+    for (int x = PIXEL_SIZE; x < WIN_WIDTH + PIXEL_SIZE; x+=PIXEL_SIZE)
     {
+
+        twistScaleFactor = calcTwistFactor(strings[x - PIXEL_SIZE].phi - strings[x + PIXEL_SIZE].phi);
+
         for (int y = 0; y < CYLINDER_HEIGHT; y+=PIXEL_SIZE)
         {
             const double d_cylinderHeight = 1.0 * CYLINDER_HEIGHT;
             SDL_Rect sourceRect;
-            sourceRect.x = x * src_x_step;
+            sourceRect.x = (x-PIXEL_SIZE) * src_x_step;
             sourceRect.y = (strings[x].y + y_over_cylinder[y]);
-            if (sourceRect.y < 0) sourceRect.y += cylinderTextureHeight;
-            sourceRect.y %= cylinderTextureHeight;
-            sourceRect.h = 1;
-            sourceRect.w = 1;
+            if (sourceRect.y < 0) sourceRect.y = cylinderTextureHeight - (abs(sourceRect.y) % cylinderTextureHeight);
+            else sourceRect.y %= cylinderTextureHeight;
+            sourceRect.h = src_x_step;
+            sourceRect.w = src_y_step;
             SDL_Rect destRect;
-            destRect.x = x;
+            destRect.x = (x-PIXEL_SIZE);
             destRect.y = round(WIN_HEIGHT/2 + ((y - CYLINDER_HEIGHT/2)*twistScaleFactor));
             destRect.w = PIXEL_SIZE;
             destRect.h = PIXEL_SIZE * twistScaleFactor *2;
@@ -479,9 +520,7 @@ static void drawString()
                 if (SDL_RenderCopy(myRenderer_p, cloudTexture_p, &sourceRect, &destRect)) printf("Error when RenderCopy: %s\n", SDL_GetError());
                 SDL_SetTextureBlendMode(cloudTexture_p, SDL_BLENDMODE_NONE);
             }
-
         }
-        twistScaleFactor = fabs(1.0 - (fabs(strings[x].phi - strings[x+2*PIXEL_SIZE].phi)));
     }
 }
 
@@ -569,6 +608,7 @@ static void updateString()
 #define MAX_FORCE 75
     static int count=0;
     double phaseshift;
+    const double dampening = 0.990;
     lightAngle = sin(count/50.0);
     phaseshift =(MAX_PHI * sin(count/40.0) + MAX_PHI * sin(count/28.0));
     count++;
@@ -576,20 +616,20 @@ static void updateString()
     this->last_phi = phaseshift;
     this->last_y = (phaseshift/2/3.14 * cylinderTextureHeight);
 
-    for (int i = PIXEL_SIZE; i < WIN_WIDTH-PIXEL_SIZE; i+=PIXEL_SIZE) {
+    for (int i = PIXEL_SIZE; i < STRING_LENGTH; i+=PIXEL_SIZE) {
         this = &strings[i];
         stringS *prev = &strings[i - PIXEL_SIZE];
-        this->last_phi = (prev->phi)*0.995;
-        this->last_y = (prev->y)*0.995;
+        this->last_phi = (prev->phi)*dampening;
+        this->last_y = (prev->y)*dampening;
         prev->phi = prev->last_phi;
         prev->y = prev->last_y;
     }
-    this = &strings[WIN_WIDTH];
-    stringS *prev = &strings[WIN_WIDTH - PIXEL_SIZE];
+    this = &strings[STRING_LENGTH];
+    stringS *prev = &strings[STRING_LENGTH - PIXEL_SIZE];
     this->phi = this->last_phi;
     this->y = this->last_y;
-    this->last_phi = (prev->phi)*0.995;
-    this->last_y = (prev->y)*0.995;
+    this->last_phi = (prev->phi)*dampening;
+    this->last_y = (prev->y)*dampening;
     prev->phi = prev->last_phi;
     prev->y = prev->last_y;
 }
@@ -777,3 +817,115 @@ static void drawClouds()
     }
   }
 }
+#define CUBE_SIDE 200
+#define CUBE_CENTER WIN_WIDTH/2
+#define CUBE_CENTER_Z 0
+struct coord corners[8] =
+{
+    //FRONT CORNERS
+    {CUBE_CENTER - CUBE_SIDE/2, CUBE_CENTER - CUBE_SIDE/2, .z = CUBE_CENTER_Z - CUBE_SIDE/2},
+    {CUBE_CENTER - CUBE_SIDE/2, CUBE_CENTER + CUBE_SIDE/2, .z = CUBE_CENTER_Z - CUBE_SIDE/2},
+    {CUBE_CENTER + CUBE_SIDE/2, CUBE_CENTER + CUBE_SIDE/2, .z = CUBE_CENTER_Z - CUBE_SIDE/2},
+    {CUBE_CENTER + CUBE_SIDE/2, CUBE_CENTER - CUBE_SIDE/2, .z = CUBE_CENTER_Z - CUBE_SIDE/2},
+
+    //BACK CORNERS
+    {CUBE_CENTER - CUBE_SIDE/2, CUBE_CENTER - CUBE_SIDE/2, .z = CUBE_CENTER_Z + CUBE_SIDE/2},
+    {CUBE_CENTER - CUBE_SIDE/2, CUBE_CENTER + CUBE_SIDE/2, .z = CUBE_CENTER_Z + CUBE_SIDE/2},
+    {CUBE_CENTER + CUBE_SIDE/2, CUBE_CENTER + CUBE_SIDE/2, .z = CUBE_CENTER_Z + CUBE_SIDE/2},
+    {CUBE_CENTER + CUBE_SIDE/2, CUBE_CENTER - CUBE_SIDE/2, .z = CUBE_CENTER_Z + CUBE_SIDE/2},
+};
+
+static void faceSortClear(struct face **sortedFaces, int numberOfFaces) {
+    memset(sortedFaces, 0, numberOfFaces * sizeof(struct face *));
+}
+
+
+/**
+ * @brief Returns returns true if faceOne is closest to cam, otherwise positive
+ *
+ * @param faceOne
+ * @param faceTwo
+ *
+ * @return 
+ */
+static bool compareFaces(struct face *faceOne, struct face *faceTwo)
+{
+    int coord = 0;
+    double faceOneMin = faceOne->coords[coord]->z;
+    double faceTwoMin = faceTwo->coords[coord]->z;
+    for (; coord < 4; coord++){
+        faceOneMin = fmin(faceOneMin, faceOne->coords[coord]->z);
+        faceTwoMin = fmin(faceTwoMin, faceTwo->coords[coord]->z);
+    }
+    return (faceOneMin < faceTwoMin);
+
+
+}
+
+static void faceSortInsert(struct face *thisFace, struct face **sortedFaces)
+{
+    struct face ** nextFaceSlot = sortedFaces;
+    int count =0;
+
+    while (*nextFaceSlot != NULL) {
+       count++;
+        if (compareFaces(*nextFaceSlot, thisFace)) {
+            faceSortInsert(*nextFaceSlot,nextFaceSlot++);
+            break;
+        }
+        nextFaceSlot++;
+    }
+    *nextFaceSlot = thisFace;
+}
+
+static void initCube()
+{
+    // init faces
+    // FRONT
+    cube.faces[0].coords[0] = &corners[0];
+    cube.faces[0].coords[1] = &corners[1];
+    cube.faces[0].coords[2] = &corners[2];
+    cube.faces[0].coords[3] = &corners[3];
+
+    //LEFT SIDE
+    cube.faces[1].coords[0] = &corners[0];
+    cube.faces[1].coords[1] = &corners[1];
+    cube.faces[1].coords[2] = &corners[4];
+    cube.faces[1].coords[3] = &corners[5];
+
+    //UPSIDE
+    cube.faces[2].coords[0] = &corners[1];
+    cube.faces[2].coords[1] = &corners[2];
+    cube.faces[2].coords[2] = &corners[5];
+    cube.faces[2].coords[3] = &corners[6];
+
+    //RIGTH SIDE
+    cube.faces[3].coords[0] = &corners[2];
+    cube.faces[3].coords[1] = &corners[3];
+    cube.faces[3].coords[2] = &corners[6];
+    cube.faces[3].coords[3] = &corners[7];
+
+    //DOWN SIDE
+    cube.faces[4].coords[0] = &corners[3];
+    cube.faces[4].coords[1] = &corners[0];
+    cube.faces[4].coords[2] = &corners[7];
+    cube.faces[4].coords[3] = &corners[4];
+
+    //BACK SIDE
+    cube.faces[5].coords[0] = &corners[4];
+    cube.faces[5].coords[1] = &corners[5];
+    cube.faces[5].coords[2] = &corners[6];
+    cube.faces[5].coords[3] = &corners[7];
+
+    printf("about to clear\n");
+    faceSortClear(cube.sortedFaces, 6);
+    for (int i = 0; i < 6; i++) {
+    printf("sort %d\n", i);
+        faceSortInsert(&cube.faces[i], cube.sortedFaces);
+    }
+}
+
+static void drawCube()
+{
+}
+

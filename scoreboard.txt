@@ -5,6 +5,6 @@ res 90
 are 68
 bel 50
 ong 40
+mak 35
 to 30
 'ao 20
-us 20
