@@ -249,13 +249,14 @@ void render(char* input_p, int score, int intervalMs)
 
   drawSky();
   drawGround();
-  drawClouds();
-  drawLeaves();
-  updateString();
-  drawString();
+  //drawClouds();
+  //drawLeaves();
+  //updateString();
+  //drawString();
   drawTree();
   //updateLens();
   //drawLens();
+  drawCube();
   
   for (int x = 0; x < gridSize; x++)
   {
@@ -817,9 +818,14 @@ static void drawClouds()
     }
   }
 }
+
+#define DISPLAY_Z 100
+#define DISPLAY_X WIN_WIDTH/2
+#define DISPLAY_Y WIN_HEIGHT/2
+
 #define CUBE_SIDE 200
-#define CUBE_CENTER WIN_WIDTH/2
-#define CUBE_CENTER_Z 0
+#define CUBE_CENTER 0
+#define CUBE_CENTER_Z -300
 struct coord corners[8] =
 {
     //FRONT CORNERS
@@ -862,6 +868,52 @@ static bool compareFaces(struct face *faceOne, struct face *faceTwo)
 
 }
 
+static void mat_mul(double Rout[3][3], double A[3][3], double B[3][3]) {
+
+    // Rout = AB;
+    for (int a = 0; a < 3; a++)
+        for (int b = 0; b < 3; b++)
+            Rout[a][b] = A[0][a]*B[b][0] +A[1][a]*B[b][1] +A[2][a]*B[b][2];
+}
+
+static void rotateCube(double phi_x, double phi_y, double phi_z) {
+    double Ry[3][3] = 
+    {
+        {cos(phi_x), 0, sin(phi_x)},
+        {0,1,0},
+        {-sin(phi_x), 0, cos(phi_x)}
+    };
+    double Rx[3][3] = 
+    {
+        {1,0,0},
+        {0,cos(phi_y),-sin(phi_y)},
+        {0,sin(phi_y),cos(phi_y)}
+    };
+    double Rz[3][3] = 
+    {
+        {cos(phi_z),-sin(phi_z), 0},
+        {sin(phi_z),cos(phi_z), 0},
+        {0,0,1},
+    };
+
+    double Rinter[3][3];
+    double Rtot[3][3];
+
+    mat_mul(Rinter, Rx, Ry);
+    mat_mul(Rtot, Rinter, Rz);
+
+
+    for (int i = 0; i < 8; i++) {
+        double x = corners[i].x;
+        double y = corners[i].y;
+        double z = corners[i].z - CUBE_CENTER_Z;
+        corners[i].x = Rtot[0][0] * x + Rtot[0][1] * y + Rtot[0][2] * z;
+        corners[i].y = Rtot[1][0] * x + Rtot[1][1] * y + Rtot[1][2] * z;
+        corners[i].z =+ CUBE_CENTER_Z + Rtot[2][0] * x  + Rtot[2][1] * y  + Rtot[2][2] * z;
+    }
+
+}
+
 static void faceSortInsert(struct face *thisFace, struct face **sortedFaces)
 {
     struct face ** nextFaceSlot = sortedFaces;
@@ -890,26 +942,26 @@ static void initCube()
     //LEFT SIDE
     cube.faces[1].coords[0] = &corners[0];
     cube.faces[1].coords[1] = &corners[1];
-    cube.faces[1].coords[2] = &corners[4];
-    cube.faces[1].coords[3] = &corners[5];
+    cube.faces[1].coords[2] = &corners[5];
+    cube.faces[1].coords[3] = &corners[4];
 
     //UPSIDE
     cube.faces[2].coords[0] = &corners[1];
     cube.faces[2].coords[1] = &corners[2];
-    cube.faces[2].coords[2] = &corners[5];
-    cube.faces[2].coords[3] = &corners[6];
+    cube.faces[2].coords[2] = &corners[6];
+    cube.faces[2].coords[3] = &corners[5];
 
     //RIGTH SIDE
     cube.faces[3].coords[0] = &corners[2];
     cube.faces[3].coords[1] = &corners[3];
-    cube.faces[3].coords[2] = &corners[6];
-    cube.faces[3].coords[3] = &corners[7];
+    cube.faces[3].coords[2] = &corners[7];
+    cube.faces[3].coords[3] = &corners[6];
 
     //DOWN SIDE
     cube.faces[4].coords[0] = &corners[3];
     cube.faces[4].coords[1] = &corners[0];
-    cube.faces[4].coords[2] = &corners[7];
-    cube.faces[4].coords[3] = &corners[4];
+    cube.faces[4].coords[2] = &corners[4];
+    cube.faces[4].coords[3] = &corners[7];
 
     //BACK SIDE
     cube.faces[5].coords[0] = &corners[4];
@@ -927,5 +979,27 @@ static void initCube()
 
 static void drawCube()
 {
+    double phi_x = 0.0001;
+    double phi_y = 0.0005;
+    double phi_z = 0.0003;
+    rotateCube(phi_x, phi_y, phi_z);
+
+    SDL_SetRenderDrawColor(myRenderer_p, 255, 255, 255, SDL_ALPHA_OPAQUE);
+
+    // for each sorted face
+    for (int face = 0; face < 6; face ++) {
+        // for each coord draw line to next
+        for (int coord = 0; coord < 3; coord++) {
+            struct coord *start_corner = cube.sortedFaces[face]->coords[coord];
+            struct coord *end_corner = cube.sortedFaces[face]->coords[coord + 1];
+//            printf("Drawing %dx%d to %dx%d\n", (int)start_corner->x, (int)start_corner->y, (int)end_corner->x, (int)end_corner->y); 
+//
+            if( SDL_RenderDrawLine(myRenderer_p,
+                    DISPLAY_Z*start_corner->x/start_corner->z + DISPLAY_X,
+                    DISPLAY_Z*start_corner->y/start_corner->z + DISPLAY_Y,
+                    DISPLAY_Z*end_corner->x/end_corner->z + DISPLAY_X,
+                    DISPLAY_Z*end_corner->y/end_corner->z + DISPLAY_Y)) printf("Failed to draw line\n");
+        }
+    }
 }
 
